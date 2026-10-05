@@ -1,265 +1,169 @@
-# Gen IV Event Distributor
+# Gen4 Event Distributor v0.9 — experimental PGT support
 
-Nintendo DS homebrew for distributing Pokémon Generation IV Mystery Gift events to retail Pokémon games through local wireless communication.
+Adds the supplied `Manaphy Egg [PPorg].pgt` (0x104 / 260 bytes).
 
-Created by **SooraMaru**.
+A Generation IV PGT is the inner gift data, not a complete Wonder Card. PKHeX
+defines PGT as 0x104 bytes and PCD as the complete card whose first 0x104 bytes
+are the PGT. Project Pokémon also documents that missing Gen IV PCDs are
+sometimes reconstructed from PGTs using placeholder card metadata.
 
-> ⚠️ **PRE-ALPHA**
->
-> This project is currently being tested. Bugs, freezes, and compatibility issues may still occur. Feedback and testing on real hardware are welcome.
+For this experimental build the supplied Manaphy PGT is wrapped into a 0x358
+PCD using known-working metadata layout, with:
+- gift payload: the supplied PGT, unchanged;
+- visible title: `Manaphy Egg [PGT]`;
+- synthetic local Card ID: `0xF001`;
+- checksum for broadcast wrapper: `0x09CF`.
 
-[Español](#español)
+This does NOT claim to reconstruct the original historical Wonder Card metadata.
+It is a functional placeholder card intended to test whether the retail game
+accepts and delivers the PGT over the already proven wireless path.
 
----
+The top-screen event list and bottom/touch personal log from v0.8.1 are retained.
+`By SooraMaru` is retained.
 
-## English
+Build: `make clean && make`
 
-### What is Gen IV Event Distributor?
+Credits/licenses from prior builds remain intact. No Nintendo distribution-ROM
+executable code is included.
 
-**Gen IV Event Distributor** turns a Nintendo DS into a wireless Mystery Gift distribution system for Generation IV Pokémon games.
+## Nintendo DS menu identity
 
-It broadcasts Wonder Cards (`.pcd`) using the Nintendo DS local wireless connection. Another Nintendo DS running a compatible retail Pokémon game can detect and receive the event through the game's normal **Mystery Gift** menu.
+The ROM now uses `icon.bmp` as its Nintendo DS menu/banner icon.
 
-The receiving Nintendo DS does **not** need custom firmware or homebrew.
+Banner text:
+- Gen4 Event Distributor
+- Pokemon Gen IV Events
+- SooraMaru
 
-### Supported games
+The source image supplied by SooraMaru is converted to the DS banner requirement:
+32x32 pixels, indexed 16-color BMP.
 
-Currently supported:
+## v0.9.2 icon fix
+The DS banner icon is now emitted as a true 32x32 **4-bpp indexed BMP with exactly
+16 palette entries**, rather than Pillow's default 8-bpp indexed BMP. This matches
+the Nintendo DS banner icon format expected by the devkitPro/ndstool conversion
+path and avoids the striped/corrupted area seen in melonDS ROM Info.
 
-- Pokémon Diamond
-- Pokémon Pearl
-- Pokémon HeartGold
-- Pokémon SoulSilver
+## v0.9.3 — English + Spanish discovery
 
-Wonder Cards are separated by game according to compatibility tests performed on real Nintendo DS hardware.
+The ARM7 broadcaster now alternates the Gen IV Mystery Gift GGID after each
+complete 10-fragment Wonder Card cycle:
 
-Not every Wonder Card is compatible with every Generation IV game.
+- English: `0x00400318`
+- Spanish: `0x008000D0`
 
-### Supported languages
+A whole card cycle remains on the same GGID before switching, so a receiving
+game never has to assemble one card from mixed-language discovery cycles.
 
-The current event catalog contains:
+The Wonder Card/PGT payload itself is unchanged. The proven raw `mwlDevTx()`
+path, channel 7, checksums, encryption and fragment generation are unchanged.
 
-- English
-- Spanish
+This build intentionally targets EN + ES first so it can be verified on the
+user's English and Spanish retail copies before adding the remaining language
+GGIDs.
 
-Events are separated by language to prevent incompatible Wonder Cards from being broadcast using the wrong language settings.
+## v0.9.4 — EN/ES dwell-time fix
 
-### How to use
+Hardware testing of v0.9.3 showed the Spanish retail game could discover the
+distribution while the English game no longer did. v0.9.3 changed language
+after every single 10-fragment card cycle, which is too aggressive for a game
+that is scanning and locking onto a distribution beacon.
 
-1. Launch **Gen IV Event Distributor** on the distributing Nintendo DS.
-2. Select the event language.
-3. Select the Pokémon game.
-4. Select the Wonder Card you want to distribute.
-5. Press **A** to start broadcasting.
-6. On the receiving Nintendo DS, launch the Pokémon game.
-7. Open **Mystery Gift**.
-8. Select the option to receive a gift via wireless.
-9. Wait for the event to appear and receive it normally.
+v0.9.4 keeps each GGID stable for 20 complete card cycles before changing:
 
-Press **B** on the distributor to stop broadcasting.
+    EN: 20 complete cards
+    ES: 20 complete cards
+    repeat
 
-After stopping a distribution, the application waits approximately **3 seconds** before another event can be broadcast. This delay is intentional and improves stability when switching between events.
+Only the discovery dwell timing changed. The raw MWL transmit path, channel,
+Wonder Card data, checksum, RC4 and fragment contents are untouched.
 
-### Debug mode
+## v0.9.5 — Manual language selector
 
-The normal bottom screen only displays basic information such as:
+Hardware testing showed that rotating EN/ES discovery GGIDs during one
+distribution session is unreliable. This version therefore keeps one GGID
+fixed for the entire session.
 
-- Distribution status
-- Active wireless channel
+Idle-menu controls:
+- UP/DOWN: choose event
+- X: toggle ENGLISH / ESPANOL
+- A: start distribution using the selected language
+- B: stop distribution
+- START: exit
 
-Press **L + R** simultaneously to enable or disable the debug screen.
+English uses `0x00400318`; Spanish uses `0x008000D0`.
+The selected language is sent to ARM7 in bit 16 of the START command.
+The raw `mwlDevTx()` path and Wonder Card payload preparation are unchanged.
 
-Debug mode displays additional information about the wireless transmitter and is useful when reporting bugs.
 
-### Building
+## v0.9.6 — Hardware-tested compatibility labels
 
-You need a recent installation of **devkitPro**, including **devkitARM** and the Nintendo DS development libraries.
+Catalog rebuilt from `data(1).zip`. Removed Shiny Eevee (RAM overflow/crash), Korean #0063, and #0183. Added #0058, #0152, and #0004 Shaymin. Compatibility labels reflect the user's real-hardware tests. Mew is marked HG/SS and carries an explicit warning that D/P/Pt crashed during testing. Manaphy PGT wrapper is marked all Gen IV games / all languages. Jirachi is marked D/P / English only.
 
-Build ARM7 first:
+The application icon is the user-provided `icon.bmp`. DS banner subtitle remains `Gen IV Events BETA`.
 
-```sh
-cd arm7
-make
-```
+## v0.9.6-CAT isolation build
 
-Then build ARM9:
+This build intentionally uses the real-hardware-stable v0.9.6 ARM7 transmitter source unchanged.
+Only the catalog data and ARM9 menu were expanded to the user-tested `eventos.zip` organization:
+English/Spanish -> Diamond/Pearl or HeartGold/SoulSilver -> event.
 
-```sh
-cd ../arm9
-make
-```
+Purpose: isolate whether the freeze is caused by the larger static ARM7 event table or by later transmitter changes.
+The raw `mwlDevTx()` beacon loop, 10.24 ms sleep, radio start/stop path, GGIDs, and TX callback behavior are exactly from the supplied stable v0.9.6 baseline.
 
-The resulting `.nds` file can then be launched through a compatible Nintendo DS homebrew environment.
+## Fragment-order fix
 
-### Current status
+The catalog generator had placed the special unencrypted Wonder Card header
+fragment at index 0. The known-good v0.9.6 tables place it at index 9, after
+the nine encrypted xPCD fragments.
 
-Gen IV Event Distributor is currently a **PRE-ALPHA**.
+Bad catalog order:
+`SPECIAL, ENC0, ENC1, ... ENC8`
 
-Wireless event distribution is functional and has been tested on real Nintendo DS hardware, but additional testing is needed.
+Known-good / corrected order:
+`ENC0, ENC1, ... ENC8, SPECIAL`
 
-If you encounter a problem, please include the following information in your report:
+All 54 generated event tables were corrected. ARM7 radio/TX code was not
+changed.
 
-- Pokémon game
-- Game language
-- Wonder Card/event
-- Nintendo DS model
-- What happened
-- Whether the problem occurs consistently or intermittently
-- Debug information, if available
+## Consecutive-gift session fix
 
-### Credits
+Fixed a race when stopping one distribution and starting another.
 
-**SooraMaru**  
-Development, integration, interface, and real-hardware testing.
+Previously `CMD_START` unconditionally set `s_radioStarted=false`. If START
+arrived before the beacon thread had processed STOP, the physical MWL radio
+could still be running while the software flag said it was stopped. The
+beacon thread could then call `mwlDevStart()` again on an already-started
+device.
 
-Special thanks to:
+This build keeps the MWL radio session alive between gifts. B stops beacon
+transmission only; selecting another gift and pressing A resets the
+fragment/sequence counters and resumes using the same radio session. No
+beacons are sent while idle.
 
-- **devkitPro / libnds / Calico** — Nintendo DS homebrew development tools.
-- **Eiskasten / wc-beacon** — Open-source work and research related to Generation IV Wonder Card broadcasting.
-- **Yuuto** — Research related to the Generation IV wireless distribution protocol.
-- Everyone helping test PRE-ALPHA builds on real Nintendo DS hardware.
+The corrected fragment order from the previous FIX build is retained.
 
-See `LICENSE-NOTES.md` for additional licensing and attribution information.
+## PRE-ALPHA community build
 
-### License
+- Mandatory 3-second quiet period after stopping one gift before another can
+  start broadcasting. A is ignored until the cooldown reaches zero.
+- Checksums are no longer shown in the public UI. The checksum required by the
+  Gen IV wireless protocol is intentionally still present internally.
+- Bottom screen is simplified for community testers: `Enviando regalo....`
+  and active channel during broadcast.
+- Hold/press L+R together to toggle the detailed debug/status screen.
+- The corrected fragment order and same-session MWL behavior are retained.
 
-Original code and modifications in this repository are distributed under the **GNU General Public License v3.0 or later (GPL-3.0-or-later)**, except for components or portions covered by their respective original licenses.
+## v0.10.1 PRE-ALPHA — eventos actualizados
 
-See the included license files and `LICENSE-NOTES.md` for details.
+Catálogo reemplazado por el contenido de `eventos(1).zip`.
+Solo se integran archivos `.pcd` de 856 bytes y la carpeta determina idioma/juego.
 
-### Disclaimer
+- ENG / DP: 11
+- ENG / HG-SS: 13
+- ESP / DP: 10
+- ESP / HG-SS: 13
+- Total: 47
 
-This is an unofficial fan-made homebrew project.
-
-It is not affiliated with, endorsed by, or supported by Nintendo, The Pokémon Company, GAME FREAK, or Creatures Inc.
-
-Pokémon and related trademarks belong to their respective owners.
-
-This project is intended for homebrew development, preservation, research, and interoperability purposes.
-
----
-
-# Español
-
-## ¿Qué es Gen IV Event Distributor?
-
-**Gen IV Event Distributor** convierte una Nintendo DS en un sistema de distribución inalámbrica de Regalos Misteriosos para los juegos de Pokémon de cuarta generación.
-
-La aplicación transmite Wonder Cards (`.pcd`) mediante la comunicación inalámbrica local de Nintendo DS. Otra Nintendo DS con un juego compatible puede detectar y recibir el evento utilizando el menú normal de **Regalo Misterioso**.
-
-La Nintendo DS que recibe el regalo **no necesita CFW ni homebrew**.
-
-## Juegos compatibles
-
-Actualmente se incluyen eventos para:
-
-- Pokémon Diamante
-- Pokémon Perla
-- Pokémon HeartGold
-- Pokémon SoulSilver
-
-Las Wonder Cards están separadas por juego según pruebas de compatibilidad realizadas en hardware real.
-
-No todas las Wonder Cards son compatibles con todos los juegos de cuarta generación.
-
-## Idiomas compatibles
-
-El catálogo actual contiene eventos en:
-
-- Inglés
-- Español
-
-Los eventos están separados por idioma para evitar transmitir una Wonder Card utilizando una configuración de idioma incompatible.
-
-## Cómo utilizarlo
-
-1. Inicia **Gen IV Event Distributor** en la Nintendo DS distribuidora.
-2. Selecciona el idioma del evento.
-3. Selecciona el juego de Pokémon.
-4. Selecciona la Wonder Card que quieres distribuir.
-5. Pulsa **A** para comenzar la transmisión.
-6. En la Nintendo DS receptora, inicia el juego de Pokémon.
-7. Entra en **Regalo Misterioso**.
-8. Selecciona la opción para recibir un regalo mediante conexión inalámbrica.
-9. Espera a que aparezca el evento y recíbelo normalmente.
-
-Pulsa **B** en la consola distribuidora para detener la transmisión.
-
-Después de detener una distribución, la aplicación espera aproximadamente **3 segundos** antes de permitir transmitir otro evento. Esta espera es intencional y mejora la estabilidad al cambiar de regalo.
-
-## Modo debug
-
-Normalmente la pantalla inferior únicamente muestra información básica:
-
-- Estado de la distribución
-- Canal inalámbrico activo
-
-Pulsa **L + R** simultáneamente para activar o desactivar el modo debug.
-
-El modo debug muestra información adicional sobre el transmisor inalámbrico y puede resultar útil al reportar errores.
-
-## Compilación
-
-Es necesaria una instalación reciente de **devkitPro**, incluyendo **devkitARM** y las librerías de desarrollo para Nintendo DS.
-
-Primero compila ARM7:
-
-```sh
-cd arm7
-make
-```
-
-Después compila ARM9:
-
-```sh
-cd ../arm9
-make
-```
-
-El archivo `.nds` resultante puede ejecutarse mediante un entorno homebrew compatible con Nintendo DS.
-
-## Estado actual
-
-Gen IV Event Distributor se encuentra actualmente en estado **PRE-ALPHA**.
-
-La distribución inalámbrica de eventos es funcional y ha sido probada en hardware real, pero todavía es necesario realizar más pruebas.
-
-Si encuentras algún problema, incluye la siguiente información en tu reporte:
-
-- Juego de Pokémon
-- Idioma del juego
-- Wonder Card/evento
-- Modelo de Nintendo DS
-- Qué ocurrió
-- Si el problema ocurre siempre o solamente algunas veces
-- Información del modo debug, si está disponible
-
-## Créditos
-
-**SooraMaru**  
-Desarrollo, integración, interfaz y pruebas en hardware real.
-
-Agradecimientos especiales a:
-
-- **devkitPro / libnds / Calico** — Herramientas de desarrollo homebrew para Nintendo DS.
-- **Eiskasten / wc-beacon** — Trabajo open source e investigación relacionada con la distribución de Wonder Cards de cuarta generación.
-- **Yuuto** — Investigación relacionada con el protocolo inalámbrico de distribución de cuarta generación.
-- Todas las personas que están ayudando a probar las versiones PRE-ALPHA en hardware real.
-
-Consulta `LICENSE-NOTES.md` para información adicional sobre licencias y atribuciones.
-
-## Licencia
-
-El código original y las modificaciones de este repositorio se distribuyen bajo la **GNU General Public License v3.0 o posterior (GPL-3.0-or-later)**, excepto aquellos componentes o partes cubiertos por sus respectivas licencias originales.
-
-Consulta los archivos de licencia incluidos y `LICENSE-NOTES.md` para más información.
-
-## Aviso legal
-
-Este es un proyecto homebrew no oficial creado por fans.
-
-No está afiliado, respaldado ni soportado por Nintendo, The Pokémon Company, GAME FREAK o Creatures Inc.
-
-Pokémon y las marcas relacionadas pertenecen a sus respectivos propietarios.
-
-Este proyecto está destinado al desarrollo homebrew, preservación, investigación e interoperabilidad.
+Se conserva el orden de fragmentos probado `ENC0..ENC8 -> SPECIAL`, la pausa
+de 3 segundos entre regalos, el debug L+R y la interfaz simplificada.
